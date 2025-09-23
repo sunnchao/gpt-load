@@ -134,6 +134,17 @@ export interface RequestLog {
   upstream_addr: string;
   is_stream: boolean;
   request_body?: string;
+  response_body?: string;
+
+  // Token usage fields
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  cached_prompt_tokens?: number;
+  cached_completion_tokens?: number;
+  reasoning_tokens?: number;
+  audio_tokens?: number;
+  image_tokens?: number;
 }
 
 export interface Pagination {

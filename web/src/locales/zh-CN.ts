@@ -359,6 +359,8 @@ export default {
     nonStream: "非流",
     statusCode: "状态码",
     duration: "耗时(ms)",
+    tokenUsage: "Token消费",
+    tokens: "Tokens",
     model: "模型",
     sourceIP: "源IP",
     groupName: "分组名",

@@ -121,6 +121,8 @@ var MessagesJaJP = map[string]string{
 	"config.log_write_interval_desc":          "リクエストログをキャッシュからデータベースに書き込む間隔（分）、0でリアルタイム書き込み。",
 	"config.enable_request_body_logging":      "リクエストボディログを有効化",
 	"config.enable_request_body_logging_desc": "完全なリクエストボディの内容をログに記録するかどうか。有効にするとメモリとストレージの使用量が増加します。",
+	"config.enable_response_body_logging":     "レスポンスボディログを有効化",
+	"config.enable_response_body_logging_desc": "完全なレスポンスボディの内容をログに記録するかどうか。有効にするとメモリとストレージの使用量が増加します。",
 
 	// Request settings related
 	"config.request_timeout":              "リクエストタイムアウト（秒）",

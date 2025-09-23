@@ -121,6 +121,8 @@ var MessagesEnUS = map[string]string{
 	"config.log_write_interval_desc":          "Interval (in minutes) for writing request logs from cache to database, 0 for real-time writes.",
 	"config.enable_request_body_logging":      "Enable Request Body Logging",
 	"config.enable_request_body_logging_desc": "Whether to log complete request body content. Enabling this will increase memory and storage usage.",
+	"config.enable_response_body_logging":     "Enable Response Body Logging",
+	"config.enable_response_body_logging_desc": "Whether to log complete response body content. Enabling this will increase memory and storage usage.",
 
 	// Request settings related
 	"config.request_timeout":              "Request Timeout (seconds)",

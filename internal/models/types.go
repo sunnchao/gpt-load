@@ -38,6 +38,7 @@ type GroupConfig struct {
 	KeyValidationConcurrency     *int    `json:"key_validation_concurrency,omitempty"`
 	KeyValidationTimeoutSeconds  *int    `json:"key_validation_timeout_seconds,omitempty"`
 	EnableRequestBodyLogging     *bool   `json:"enable_request_body_logging,omitempty"`
+	EnableResponseBodyLogging    *bool   `json:"enable_response_body_logging,omitempty"`
 }
 
 // HeaderRule defines a single rule for header manipulation.
@@ -114,6 +115,25 @@ type RequestLog struct {
 	UpstreamAddr string    `gorm:"type:varchar(500)" json:"upstream_addr"`
 	IsStream     bool      `gorm:"not null" json:"is_stream"`
 	RequestBody  string    `gorm:"type:text" json:"request_body"`
+	ResponseBody string    `gorm:"type:text" json:"response_body"`
+
+	// Token usage fields - 支持各种 token 类型
+	PromptTokens           *int `gorm:"default:null" json:"prompt_tokens,omitempty"`
+	CompletionTokens       *int `gorm:"default:null" json:"completion_tokens,omitempty"`
+	TotalTokens            *int `gorm:"default:null" json:"total_tokens,omitempty"`
+
+	// 缓存相关 token (适用于支持缓存的模型)
+	CachedPromptTokens     *int `gorm:"default:null" json:"cached_prompt_tokens,omitempty"`
+	CachedCompletionTokens *int `gorm:"default:null" json:"cached_completion_tokens,omitempty"`
+
+	// 推理相关 token (适用于 Claude 等推理模型)
+	ReasoningTokens        *int `gorm:"default:null" json:"reasoning_tokens,omitempty"`
+
+	// 音频相关 token (适用于语音模型)
+	AudioTokens            *int `gorm:"default:null" json:"audio_tokens,omitempty"`
+
+	// 图像相关 token (适用于视觉模型)
+	ImageTokens            *int `gorm:"default:null" json:"image_tokens,omitempty"`
 }
 
 // StatCard 用于仪表盘的单个统计卡片数据

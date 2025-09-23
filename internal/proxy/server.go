@@ -106,7 +106,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil {
 		logrus.Errorf("Failed to select a key for group %s on attempt %d: %v", group.Name, retryCount+1, err)
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrNoKeysAvailable, err.Error()))
-		ps.logRequest(c, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, models.RequestTypeFinal)
+		ps.logRequest(c, group, nil, startTime, http.StatusServiceUnavailable, err, isStream, "", channelHandler, bodyBytes, models.RequestTypeFinal, nil)
 		return
 	}
 
@@ -166,7 +166,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	if err != nil || (resp != nil && resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound) {
 		if err != nil && app_errors.IsIgnorableError(err) {
 			logrus.Debugf("Client-side ignorable error for key %s, aborting retries: %v", utils.MaskAPIKey(apiKey.KeyValue), err)
-			ps.logRequest(c, group, apiKey, startTime, 499, err, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+			ps.logRequest(c, group, apiKey, startTime, 499, err, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal, nil)
 			return
 		}
 
@@ -204,7 +204,7 @@ func (ps *ProxyServer) executeRequestWithRetry(
 			requestType = models.RequestTypeFinal
 		}
 
-		ps.logRequest(c, group, apiKey, startTime, statusCode, errors.New(parsedError), isStream, upstreamURL, channelHandler, bodyBytes, requestType)
+		ps.logRequest(c, group, apiKey, startTime, statusCode, errors.New(parsedError), isStream, upstreamURL, channelHandler, bodyBytes, requestType, nil)
 
 		// 如果是最后一次尝试，直接返回错误，不再递归
 		if isLastAttempt {
@@ -231,13 +231,14 @@ func (ps *ProxyServer) executeRequestWithRetry(
 	}
 	c.Status(resp.StatusCode)
 
+	var responseData *ResponseData
 	if isStream {
-		ps.handleStreamingResponse(c, resp)
+		responseData = ps.handleStreamingResponse(c, resp, group)
 	} else {
-		ps.handleNormalResponse(c, resp)
+		responseData = ps.handleNormalResponse(c, resp, group)
 	}
 
-	ps.logRequest(c, group, apiKey, startTime, resp.StatusCode, nil, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal)
+	ps.logRequest(c, group, apiKey, startTime, resp.StatusCode, nil, isStream, upstreamURL, channelHandler, bodyBytes, models.RequestTypeFinal, responseData)
 }
 
 // logRequest is a helper function to create and record a request log.
@@ -253,16 +254,23 @@ func (ps *ProxyServer) logRequest(
 	channelHandler channel.ChannelProxy,
 	bodyBytes []byte,
 	requestType string,
+	responseData *ResponseData,
 ) {
 	if ps.requestLogService == nil {
 		return
 	}
 
-	var requestBodyToLog, userAgent string
+	var requestBodyToLog, responseBodyToLog, userAgent string
 
+	// 记录请求体（如果启用）
 	if group.EffectiveConfig.EnableRequestBodyLogging {
 		requestBodyToLog = utils.TruncateString(string(bodyBytes), 65000)
 		userAgent = c.Request.UserAgent()
+	}
+
+	// 记录响应体（如果启用）
+	if group.EffectiveConfig.EnableResponseBodyLogging && responseData != nil && responseData.Body != nil {
+		responseBodyToLog = utils.TruncateString(string(responseData.Body), 65000)
 	}
 
 	duration := time.Since(startTime).Milliseconds()
@@ -280,6 +288,36 @@ func (ps *ProxyServer) logRequest(
 		IsStream:     isStream,
 		UpstreamAddr: utils.TruncateString(upstreamAddr, 500),
 		RequestBody:  requestBodyToLog,
+		ResponseBody: responseBodyToLog,
+	}
+
+	// 添加 token 使用量信息
+	if responseData != nil && responseData.TokenUsage != nil {
+		tokenUsage := responseData.TokenUsage
+		if tokenUsage.PromptTokens > 0 {
+			logEntry.PromptTokens = &tokenUsage.PromptTokens
+		}
+		if tokenUsage.CompletionTokens > 0 {
+			logEntry.CompletionTokens = &tokenUsage.CompletionTokens
+		}
+		if tokenUsage.TotalTokens > 0 {
+			logEntry.TotalTokens = &tokenUsage.TotalTokens
+		}
+		if tokenUsage.CachedPromptTokens > 0 {
+			logEntry.CachedPromptTokens = &tokenUsage.CachedPromptTokens
+		}
+		if tokenUsage.CachedCompletionTokens > 0 {
+			logEntry.CachedCompletionTokens = &tokenUsage.CachedCompletionTokens
+		}
+		if tokenUsage.ReasoningTokens > 0 {
+			logEntry.ReasoningTokens = &tokenUsage.ReasoningTokens
+		}
+		if tokenUsage.AudioTokens > 0 {
+			logEntry.AudioTokens = &tokenUsage.AudioTokens
+		}
+		if tokenUsage.ImageTokens > 0 {
+			logEntry.ImageTokens = &tokenUsage.ImageTokens
+		}
 	}
 
 	if channelHandler != nil && bodyBytes != nil {
