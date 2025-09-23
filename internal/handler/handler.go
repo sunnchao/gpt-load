@@ -31,6 +31,8 @@ type Server struct {
 	LogService                 *services.LogService
 	CommonHandler              *CommonHandler
 	EncryptionSvc              encryption.Service
+	UserHandler                *UserHandler
+	UserService                *services.UserService
 }
 
 // NewServerParams defines the dependencies for the NewServer constructor.
@@ -48,10 +50,13 @@ type NewServerParams struct {
 	LogService                 *services.LogService
 	CommonHandler              *CommonHandler
 	EncryptionSvc              encryption.Service
+	UserService                *services.UserService
 }
 
 // NewServer creates a new handler instance with dependencies injected by dig.
 func NewServer(params NewServerParams) *Server {
+	userHandler := NewUserHandler(params.UserService)
+
 	return &Server{
 		DB:                         params.DB,
 		config:                     params.Config,
@@ -65,6 +70,8 @@ func NewServer(params NewServerParams) *Server {
 		LogService:                 params.LogService,
 		CommonHandler:              params.CommonHandler,
 		EncryptionSvc:              params.EncryptionSvc,
+		UserHandler:                userHandler,
+		UserService:                params.UserService,
 	}
 }
 

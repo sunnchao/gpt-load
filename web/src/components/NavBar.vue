@@ -3,8 +3,10 @@ import { type MenuOption } from "naive-ui";
 import { computed, h, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { useUserStore } from "@/stores/user";
 
 const { t } = useI18n();
+const userStore = useUserStore();
 
 const props = defineProps({
   mode: {
@@ -20,8 +22,28 @@ const menuOptions = computed<MenuOption[]>(() => {
     renderMenuItem("dashboard", t("nav.dashboard"), "📊"),
     renderMenuItem("keys", t("nav.keys"), "🔑"),
     renderMenuItem("logs", t("nav.logs"), "📋"),
-    renderMenuItem("settings", t("nav.settings"), "⚙️"),
   ];
+
+  // Claude Tokens 菜单项
+  options.push(renderMenuItem("claude-tokens", "Claude Tokens", "🤖"));
+
+  // 用户系统相关菜单
+  if (userStore.isLoggedIn) {
+    // 个人资料（所有用户都能看到）
+    if (props.mode === "vertical") {
+      options.push(renderMenuItem("profile", "个人资料", "👤"));
+    }
+
+    // 用户管理（仅管理员）
+    if (userStore.isAdmin) {
+      options.push(renderMenuItem("users", "用户管理", "👥"));
+    }
+  }
+
+  // 设置页面（管理员或原有系统登录用户）
+  if (userStore.isAdmin || !userStore.isLoggedIn) {
+    options.push(renderMenuItem("settings", t("nav.settings"), "⚙️"));
+  }
 
   return options;
 });

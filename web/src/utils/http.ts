@@ -1,5 +1,6 @@
 import i18n from "@/locales";
 import { useAuthService } from "@/services/auth";
+import { useUserStore } from "@/stores/user";
 import axios from "axios";
 import { appState } from "./app-state";
 
@@ -24,10 +25,17 @@ http.interceptors.request.use(config => {
   if (config.url && !noLoadingUrls.includes(config.url)) {
     appState.loading = true;
   }
+
+  // 优先使用用户系统的token，回退到原有的authKey
+  const userToken = localStorage.getItem("user_token");
   const authKey = localStorage.getItem("authKey");
-  if (authKey) {
+
+  if (userToken) {
+    config.headers.Authorization = `Bearer ${userToken}`;
+  } else if (authKey) {
     config.headers.Authorization = `Bearer ${authKey}`;
   }
+
   // 添加语言头
   const locale = localStorage.getItem("locale") || "zh-CN";
   config.headers["Accept-Language"] = locale;
@@ -47,7 +55,15 @@ http.interceptors.response.use(
     appState.loading = false;
     if (error.response) {
       if (error.response.status === 401) {
-        if (window.location.pathname !== "/login") {
+        // 检查是否是用户系统的401错误
+        const userToken = localStorage.getItem("user_token");
+        if (userToken && window.location.pathname !== "/user-login") {
+          // 用户系统token失效，清除状态并跳转到用户登录页
+          const userStore = useUserStore();
+          userStore.logout();
+          window.location.href = "/user-login";
+        } else if (window.location.pathname !== "/login") {
+          // 原有系统的401处理
           const { logout } = useAuthService();
           logout();
           window.location.href = "/login";

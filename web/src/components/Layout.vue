@@ -2,12 +2,14 @@
 import AppFooter from "@/components/AppFooter.vue";
 import GlobalTaskProgressBar from "@/components/GlobalTaskProgressBar.vue";
 import LanguageSelector from "@/components/LanguageSelector.vue";
-import Logout from "@/components/Logout.vue";
+import UserMenu from "@/components/UserMenu.vue";
 import NavBar from "@/components/NavBar.vue";
 import ThemeToggle from "@/components/ThemeToggle.vue";
+import { useUserStore } from "@/stores/user";
 import { useMediaQuery } from "@vueuse/core";
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 
+const userStore = useUserStore();
 const isMenuOpen = ref(false);
 const isMobile = useMediaQuery("(max-width: 768px)");
 
@@ -20,6 +22,11 @@ watch(isMobile, value => {
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value;
 };
+
+// 初始化用户状态
+onMounted(() => {
+  userStore.initUserState();
+});
 </script>
 
 <template>
@@ -40,7 +47,7 @@ const toggleMenu = () => {
         <div class="header-actions">
           <language-selector />
           <theme-toggle />
-          <logout v-if="!isMobile" />
+          <user-menu v-if="!isMobile" />
           <n-button v-if="isMobile" text @click="toggleMenu">
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
@@ -59,7 +66,7 @@ const toggleMenu = () => {
           <nav-bar mode="vertical" @close="isMenuOpen = false" />
         </div>
         <div class="mobile-actions">
-          <logout />
+          <user-menu />
         </div>
       </n-drawer-content>
     </n-drawer>

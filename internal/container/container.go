@@ -76,6 +76,12 @@ func BuildContainer() (*dig.Container, error) {
 	if err := container.Provide(services.NewGroupManager); err != nil {
 		return nil, err
 	}
+
+	// User Management Service
+	if err := container.Provide(services.NewUserService); err != nil {
+		return nil, err
+	}
+
 	if err := container.Provide(keypool.NewProvider); err != nil {
 		return nil, err
 	}

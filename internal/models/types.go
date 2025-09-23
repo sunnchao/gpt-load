@@ -13,6 +13,86 @@ const (
 	KeyStatusInvalid = "invalid"
 )
 
+// 用户角色常量
+const (
+	RoleAdmin  = "admin"
+	RoleUser   = "user"
+	RoleViewer = "viewer"
+)
+
+// 用户状态常量
+const (
+	UserStatusActive   = "active"
+	UserStatusInactive = "inactive"
+	UserStatusBanned   = "banned"
+)
+
+// User 用户模型
+type User struct {
+	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username       string    `gorm:"type:varchar(50);not null;uniqueIndex" json:"username"`
+	Email          string    `gorm:"type:varchar(255);uniqueIndex" json:"email"`
+	PasswordHash   string    `gorm:"type:varchar(255);not null" json:"-"`
+	DisplayName    string    `gorm:"type:varchar(100)" json:"display_name"`
+	Role           string    `gorm:"type:varchar(20);not null;default:'user'" json:"role"`
+	Status         string    `gorm:"type:varchar(20);not null;default:'active'" json:"status"`
+	Avatar         string    `gorm:"type:varchar(500)" json:"avatar"`
+	LastLoginAt    *time.Time `json:"last_login_at"`
+	LastLoginIP    string    `gorm:"type:varchar(45)" json:"last_login_ip"`
+	LoginCount     int64     `gorm:"default:0" json:"login_count"`
+	FailedAttempts int       `gorm:"default:0" json:"failed_attempts"`
+	LockedUntil    *time.Time `json:"locked_until"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+
+	// 关联关系
+	UserGroups []UserGroup `gorm:"foreignKey:UserID" json:"user_groups,omitempty"`
+	Sessions   []UserSession `gorm:"foreignKey:UserID" json:"sessions,omitempty"`
+}
+
+// UserGroup 用户分组关联 - 多对多关系
+type UserGroup struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	GroupID   uint      `gorm:"not null;index" json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// 关联
+	User  User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Group Group `gorm:"foreignKey:GroupID" json:"group,omitempty"`
+}
+
+// UserSession 用户会话管理
+type UserSession struct {
+	ID        string    `gorm:"type:varchar(128);primaryKey" json:"id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Token     string    `gorm:"type:varchar(255);not null;uniqueIndex" json:"token"`
+	UserAgent string    `gorm:"type:text" json:"user_agent"`
+	IPAddress string    `gorm:"type:varchar(45)" json:"ip_address"`
+	ExpiresAt time.Time `gorm:"not null;index" json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// 关联
+	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// UserActivity 用户活动日志
+type UserActivity struct {
+	ID          uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID      uint            `gorm:"not null;index" json:"user_id"`
+	Action      string          `gorm:"type:varchar(100);not null" json:"action"`
+	Resource    string          `gorm:"type:varchar(100)" json:"resource"`
+	ResourceID  string          `gorm:"type:varchar(100)" json:"resource_id"`
+	IPAddress   string          `gorm:"type:varchar(45)" json:"ip_address"`
+	UserAgent   string          `gorm:"type:text" json:"user_agent"`
+	Details     datatypes.JSON  `gorm:"type:json" json:"details"`
+	Timestamp   time.Time       `gorm:"not null;index" json:"timestamp"`
+
+	// 关联
+	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
 // SystemSetting 对应 system_settings 表
 type SystemSetting struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`

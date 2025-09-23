@@ -100,11 +100,30 @@ func registerAPIRoutes(
 // registerPublicAPIRoutes 公开API路由
 func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
 	api.POST("/auth/login", serverHandler.Login)
+
+	// 用户认证相关公开路由
+	api.POST("/users/login", serverHandler.UserHandler.Login)
 }
 
 // registerProtectedAPIRoutes 认证API路由
 func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
 	api.GET("/channel-types", serverHandler.CommonHandler.GetChannelTypes)
+
+	// 用户管理相关路由
+	users := api.Group("/users")
+	{
+		users.GET("/profile", serverHandler.UserHandler.GetProfile)
+		users.PUT("/profile", serverHandler.UserHandler.UpdateProfile)
+		users.POST("/change-password", serverHandler.UserHandler.ChangePassword)
+		users.POST("/logout", serverHandler.UserHandler.Logout)
+
+		// 管理员专用路由
+		users.POST("", serverHandler.UserHandler.Register)           // 创建用户
+		users.GET("", serverHandler.UserHandler.ListUsers)          // 用户列表
+		users.GET("/:id", serverHandler.UserHandler.GetUser)        // 获取用户
+		users.PUT("/:id", serverHandler.UserHandler.UpdateUser)     // 更新用户
+		users.DELETE("/:id", serverHandler.UserHandler.DeleteUser)  // 删除用户
+	}
 
 	groups := api.Group("/groups")
 	{
