@@ -27,6 +27,11 @@ const routes: Array<RouteRecordRaw> = [
         name: "settings",
         component: () => import("@/views/Settings.vue"),
       },
+      {
+        path: "claude-tokens",
+        name: "claude-tokens",
+        component: () => import("@/views/ClaudeTokens.vue"),
+      },
     ],
   },
   {

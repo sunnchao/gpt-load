@@ -15,9 +15,14 @@ type TokenUsage struct {
 	TotalTokens            int `json:"total_tokens"`
 	CachedPromptTokens     int `json:"cached_prompt_tokens,omitempty"`
 	CachedCompletionTokens int `json:"cached_completion_tokens,omitempty"`
+	CacheCreationTokens    int `json:"cache_creation_tokens,omitempty"`
+	CacheReadTokens        int `json:"cache_read_tokens,omitempty"`
+	Ephemeral5mTokens      int `json:"ephemeral_5m_tokens,omitempty"`
+	Ephemeral1hTokens      int `json:"ephemeral_1h_tokens,omitempty"`
 	ReasoningTokens        int `json:"reasoning_tokens,omitempty"`
 	AudioTokens            int `json:"audio_tokens,omitempty"`
 	ImageTokens            int `json:"image_tokens,omitempty"`
+	ServiceTier            string `json:"service_tier,omitempty"`
 }
 
 // ResponseParser interface for different AI providers
@@ -184,40 +189,149 @@ func (p *ClaudeParser) ParseTokenUsage(body []byte) (*TokenUsage, error) {
 }
 
 func (p *ClaudeParser) ParseStreamingTokenUsage(data []byte) (*TokenUsage, error) {
-	// Claude streaming format includes usage in message_stop event
+	// Claude streaming format includes usage in message_start and message_delta events
 	lines := bytes.Split(data, []byte("\n"))
 
-	for i := len(lines) - 1; i >= 0; i-- {
+	var messageStartUsage *TokenUsage
+	var messageDeltaUsage *TokenUsage
+
+	for i := 0; i < len(lines); i++ {
 		line := bytes.TrimSpace(lines[i])
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			jsonData := bytes.TrimPrefix(line, []byte("data: "))
 
-			var event struct {
+			// Parse message_start event for initial usage info
+			var messageStartEvent struct {
 				Type    string `json:"type"`
 				Message *struct {
+					ID    string `json:"id"`
+					Model string `json:"model"`
 					Usage struct {
-						InputTokens  int `json:"input_tokens"`
-						OutputTokens int `json:"output_tokens"`
-						CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
-						CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+						InputTokens               int `json:"input_tokens"`
+						OutputTokens              int `json:"output_tokens"`
+						CacheCreationInputTokens  int `json:"cache_creation_input_tokens,omitempty"`
+						CacheReadInputTokens      int `json:"cache_read_input_tokens,omitempty"`
+						CacheCreation            *struct {
+							Ephemeral5mInputTokens  int `json:"ephemeral_5m_input_tokens,omitempty"`
+							Ephemeral1hInputTokens  int `json:"ephemeral_1h_input_tokens,omitempty"`
+						} `json:"cache_creation,omitempty"`
+						ServiceTier              string `json:"service_tier,omitempty"`
 					} `json:"usage"`
 				} `json:"message,omitempty"`
 			}
 
-			if err := json.Unmarshal(jsonData, &event); err == nil {
-				if event.Type == "message_stop" && event.Message != nil {
-					totalTokens := event.Message.Usage.InputTokens + event.Message.Usage.OutputTokens
-					cachedTokens := event.Message.Usage.CacheCreationInputTokens + event.Message.Usage.CacheReadInputTokens
+			if err := json.Unmarshal(jsonData, &messageStartEvent); err == nil {
+				if messageStartEvent.Type == "message_start" && messageStartEvent.Message != nil {
+					usage := messageStartEvent.Message.Usage
+					totalTokens := usage.InputTokens + usage.OutputTokens
+					cachedTokens := usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+
+					// Add ephemeral cache tokens if present
+					ephemeral5m := 0
+					ephemeral1h := 0
+					if usage.CacheCreation != nil {
+						ephemeral5m = usage.CacheCreation.Ephemeral5mInputTokens
+						ephemeral1h = usage.CacheCreation.Ephemeral1hInputTokens
+						cachedTokens += ephemeral5m + ephemeral1h
+					}
+
+					messageStartUsage = &TokenUsage{
+						PromptTokens:        usage.InputTokens,
+						CompletionTokens:    usage.OutputTokens,
+						TotalTokens:         totalTokens,
+						CachedPromptTokens:  cachedTokens,
+						CacheCreationTokens: usage.CacheCreationInputTokens,
+						CacheReadTokens:     usage.CacheReadInputTokens,
+						Ephemeral5mTokens:   ephemeral5m,
+						Ephemeral1hTokens:   ephemeral1h,
+						ServiceTier:         usage.ServiceTier,
+					}
+				}
+			}
+
+			// Parse message_delta event for final usage info
+			var messageDeltaEvent struct {
+				Type  string `json:"type"`
+				Delta *struct {
+					StopReason string `json:"stop_reason"`
+				} `json:"delta,omitempty"`
+				Usage *struct {
+					InputTokens               int `json:"input_tokens"`
+					OutputTokens              int `json:"output_tokens"`
+					CacheCreationInputTokens  int `json:"cache_creation_input_tokens,omitempty"`
+					CacheReadInputTokens      int `json:"cache_read_input_tokens,omitempty"`
+					CacheCreation            *struct {
+						Ephemeral5mInputTokens  int `json:"ephemeral_5m_input_tokens,omitempty"`
+						Ephemeral1hInputTokens  int `json:"ephemeral_1h_input_tokens,omitempty"`
+					} `json:"cache_creation,omitempty"`
+				} `json:"usage,omitempty"`
+			}
+
+			if err := json.Unmarshal(jsonData, &messageDeltaEvent); err == nil {
+				if messageDeltaEvent.Type == "message_delta" && messageDeltaEvent.Usage != nil {
+					usage := messageDeltaEvent.Usage
+					totalTokens := usage.InputTokens + usage.OutputTokens
+					cachedTokens := usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+
+					// Add ephemeral cache tokens if present
+					ephemeral5m := 0
+					ephemeral1h := 0
+					if usage.CacheCreation != nil {
+						ephemeral5m = usage.CacheCreation.Ephemeral5mInputTokens
+						ephemeral1h = usage.CacheCreation.Ephemeral1hInputTokens
+						cachedTokens += ephemeral5m + ephemeral1h
+					}
+
+					messageDeltaUsage = &TokenUsage{
+						PromptTokens:        usage.InputTokens,
+						CompletionTokens:    usage.OutputTokens,
+						TotalTokens:         totalTokens,
+						CachedPromptTokens:  cachedTokens,
+						CacheCreationTokens: usage.CacheCreationInputTokens,
+						CacheReadTokens:     usage.CacheReadInputTokens,
+						Ephemeral5mTokens:   ephemeral5m,
+						Ephemeral1hTokens:   ephemeral1h,
+					}
+				}
+			}
+
+			// Also handle legacy message_stop format
+			var messageStopEvent struct {
+				Type    string `json:"type"`
+				Message *struct {
+					Usage struct {
+						InputTokens               int `json:"input_tokens"`
+						OutputTokens              int `json:"output_tokens"`
+						CacheCreationInputTokens  int `json:"cache_creation_input_tokens,omitempty"`
+						CacheReadInputTokens      int `json:"cache_read_input_tokens,omitempty"`
+					} `json:"usage"`
+				} `json:"message,omitempty"`
+			}
+
+			if err := json.Unmarshal(jsonData, &messageStopEvent); err == nil {
+				if messageStopEvent.Type == "message_stop" && messageStopEvent.Message != nil {
+					usage := messageStopEvent.Message.Usage
+					totalTokens := usage.InputTokens + usage.OutputTokens
+					cachedTokens := usage.CacheCreationInputTokens + usage.CacheReadInputTokens
 
 					return &TokenUsage{
-						PromptTokens:       event.Message.Usage.InputTokens,
-						CompletionTokens:   event.Message.Usage.OutputTokens,
+						PromptTokens:       usage.InputTokens,
+						CompletionTokens:   usage.OutputTokens,
 						TotalTokens:        totalTokens,
 						CachedPromptTokens: cachedTokens,
 					}, nil
 				}
 			}
 		}
+	}
+
+	// Return the most complete usage info available
+	// Prefer message_delta over message_start as it contains final token counts
+	if messageDeltaUsage != nil {
+		return messageDeltaUsage, nil
+	}
+	if messageStartUsage != nil {
+		return messageStartUsage, nil
 	}
 
 	return nil, nil
