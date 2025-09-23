@@ -289,6 +289,59 @@ const allColumnConfigs: ColumnConfig[] = [
     required: true, // 必选字段
   },
   {
+    key: "tokens",
+    title: t("logs.tokenUsage"),
+    width: 220,
+    defaultVisible: true,
+    render: (row: LogRow) => {
+      if (!row.total_tokens) {
+        return "-";
+      }
+
+      const parts: VNodeChild[] = [];
+      if (row.total_tokens) {
+        parts.push(h("span", { style: "font-weight: bold; color: var(--primary-color)" }, `${row.total_tokens}`));
+      }
+      if (row.prompt_tokens || row.completion_tokens) {
+        parts.push(h("span", { style: "color: var(--text-secondary); font-size: 11px" },
+          ` (${row.prompt_tokens || 0}+${row.completion_tokens || 0})`));
+      }
+
+      const tooltip: string[] = [];
+      if (row.cached_prompt_tokens) {
+        tooltip.push(`缓存输入: ${row.cached_prompt_tokens}`);
+      }
+      if (row.reasoning_tokens) {
+        tooltip.push(`推理: ${row.reasoning_tokens}`);
+      }
+      if (row.audio_tokens) {
+        tooltip.push(`音频: ${row.audio_tokens}`);
+      }
+      if (row.image_tokens) {
+        tooltip.push(`图像: ${row.image_tokens}`);
+      }
+
+      if (tooltip.length > 0) {
+        return h(
+          NTooltip,
+          { trigger: "hover" },
+          {
+            trigger: () => h("div", { style: "display: flex; align-items: center; gap: 4px" }, [
+              ...parts,
+              h("span", { style: "color: var(--info-color); font-size: 10px" }, " ⓘ")
+            ]),
+            default: () => h("div", {}, [
+              h("div", { style: "font-weight: bold; margin-bottom: 4px" }, "Token 详情:"),
+              ...tooltip.map(tip => h("div", { style: "font-size: 12px" }, tip))
+            ])
+          }
+        );
+      }
+
+      return h("div", {}, parts);
+    }
+  },
+  {
     key: "key_value",
     title: "Key",
     width: 200,
@@ -458,6 +511,11 @@ const selectAllColumns = () => {
 const deselectAllColumns = () => {
   // Keep required columns selected
   visibleColumns.value = allColumnConfigs.filter(col => col.required).map(col => col.key);
+};
+
+// Helper function to check if log has advanced token information
+const hasAdvancedTokens = (log: LogRow) => {
+  return log.cached_prompt_tokens || log.reasoning_tokens || log.audio_tokens || log.image_tokens;
 };
 </script>
 
@@ -749,6 +807,32 @@ const deselectAllColumns = () => {
                 <n-tag :type="selectedLog.is_stream ? 'info' : 'default'" size="small">
                   {{ selectedLog.is_stream ? t("logs.stream") : t("logs.nonStream") }}
                 </n-tag>
+              </div>
+              <div class="detail-item-compact" v-if="selectedLog.total_tokens">
+                <span class="detail-label-compact">{{ t("logs.tokenUsage") }}:</span>
+                <div class="token-usage-display">
+                  <n-tag type="primary" size="small">
+                    总计: {{ selectedLog.total_tokens }}
+                  </n-tag>
+                  <span v-if="selectedLog.prompt_tokens || selectedLog.completion_tokens"
+                        class="token-breakdown">
+                    ({{ selectedLog.prompt_tokens || 0 }}+{{ selectedLog.completion_tokens || 0 }})
+                  </span>
+                  <div v-if="hasAdvancedTokens(selectedLog)" class="advanced-tokens">
+                    <n-tag v-if="selectedLog.cached_prompt_tokens" type="info" size="tiny">
+                      缓存: {{ selectedLog.cached_prompt_tokens }}
+                    </n-tag>
+                    <n-tag v-if="selectedLog.reasoning_tokens" type="warning" size="tiny">
+                      推理: {{ selectedLog.reasoning_tokens }}
+                    </n-tag>
+                    <n-tag v-if="selectedLog.audio_tokens" type="success" size="tiny">
+                      音频: {{ selectedLog.audio_tokens }}
+                    </n-tag>
+                    <n-tag v-if="selectedLog.image_tokens" type="error" size="tiny">
+                      图像: {{ selectedLog.image_tokens }}
+                    </n-tag>
+                  </div>
+                </div>
               </div>
               <div class="detail-item-compact">
                 <span class="detail-label-compact">{{ t("logs.sourceIP") }}:</span>
@@ -1254,5 +1338,32 @@ const deselectAllColumns = () => {
   min-width: 100px;
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Token usage display styles */
+.token-usage-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.token-breakdown {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.advanced-tokens {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.detail-item-compact .token-usage-display {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 </style>
