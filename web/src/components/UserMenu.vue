@@ -1,47 +1,59 @@
 <script setup lang="ts">
-import { useUserStore } from "@/stores/user"
-import { useAuthService } from "@/services/auth"
-import { useRouter } from "vue-router"
-import { useI18n } from "vue-i18n"
-import { PersonOutline, SettingsOutline, LogOutOutline, PeopleOutline } from "@vicons/ionicons5"
+import { useAuthService } from "@/services/auth";
+import { useUserStore } from "@/stores/user";
+import { LogOutOutline, PeopleOutline, PersonOutline, SettingsOutline } from "@vicons/ionicons5";
+import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 
-const { t } = useI18n()
-const router = useRouter()
-const userStore = useUserStore()
-const { logout: authLogout } = useAuthService()
+const { t } = useI18n();
+const router = useRouter();
+const userStore = useUserStore();
+const { logout: authLogout } = useAuthService();
 
 // 处理退出登录
 const handleLogout = async () => {
   // 如果用户系统已登录，使用用户系统退出
   if (userStore.isLoggedIn) {
-    await userStore.logout()
-    router.replace("/user-login")
+    await userStore.logout();
+    router.replace("/user-login");
   } else {
     // 否则使用原有系统退出
-    authLogout()
-    router.replace("/login")
+    authLogout();
+    router.replace("/login");
   }
-}
+};
 
 // 跳转到个人资料
 const goToProfile = () => {
-  router.push("/profile")
-}
+  router.push("/profile");
+};
 
 // 跳转到用户管理（仅管理员）
 const goToUserManagement = () => {
-  router.push("/users")
-}
+  router.push("/users");
+};
 
 // 获取角色显示文本
 const getRoleText = (role?: string) => {
   const roleMap = {
-    admin: '管理员',
-    user: '用户',
-    viewer: '访客'
-  }
-  return roleMap[role as keyof typeof roleMap] || role || ''
-}
+    admin: "管理员",
+    user: "用户",
+    viewer: "访客",
+  };
+  return roleMap[role as keyof typeof roleMap] || role || "";
+};
+</script>
+
+<script lang="ts">
+import { useMediaQuery } from "@vueuse/core";
+import { h } from "vue";
+
+export default {
+  setup() {
+    const isMobile = useMediaQuery("(max-width: 768px)");
+    return { isMobile, h };
+  },
+};
 </script>
 
 <template>
@@ -54,17 +66,21 @@ const getRoleText = (role?: string) => {
           key: 'profile',
           label: '个人资料',
           icon: () => h(NIcon, { component: PersonOutline }),
-          props: { onClick: goToProfile }
+          props: { onClick: goToProfile },
         },
-        ...(userStore.isAdmin ? [{
-          key: 'users',
-          label: '用户管理',
-          icon: () => h(NIcon, { component: PeopleOutline }),
-          props: { onClick: goToUserManagement }
-        }] : []),
+        ...(userStore.isAdmin
+          ? [
+              {
+                key: 'users',
+                label: '用户管理',
+                icon: () => h(NIcon, { component: PeopleOutline }),
+                props: { onClick: goToUserManagement },
+              },
+            ]
+          : []),
         {
           key: 'divider',
-          type: 'divider'
+          type: 'divider',
         },
         {
           key: 'logout',
@@ -72,9 +88,9 @@ const getRoleText = (role?: string) => {
           icon: () => h(NIcon, { component: LogOutOutline }),
           props: {
             onClick: handleLogout,
-            style: 'color: #dc2626;'
-          }
-        }
+            style: 'color: #dc2626;',
+          },
+        },
       ]"
       placement="bottom-end"
     >
@@ -86,7 +102,9 @@ const getRoleText = (role?: string) => {
           class="user-avatar"
         />
         <div v-if="!isMobile" class="user-info">
-          <div class="username">{{ userStore.currentUser?.display_name || userStore.currentUser?.username }}</div>
+          <div class="username">
+            {{ userStore.currentUser?.display_name || userStore.currentUser?.username }}
+          </div>
           <div class="role">{{ getRoleText(userStore.currentUser?.role) }}</div>
         </div>
         <n-icon :component="SettingsOutline" class="dropdown-icon" />
@@ -104,18 +122,6 @@ const getRoleText = (role?: string) => {
     </n-button>
   </template>
 </template>
-
-<script>
-import { useMediaQuery } from "@vueuse/core"
-import { h } from "vue"
-
-export default {
-  setup() {
-    const isMobile = useMediaQuery("(max-width: 768px)")
-    return { isMobile, h }
-  }
-}
-</script>
 
 <style scoped>
 .user-menu-trigger {

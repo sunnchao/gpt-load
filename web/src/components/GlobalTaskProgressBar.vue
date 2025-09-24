@@ -2,7 +2,7 @@
 import { keysApi } from "@/api/keys";
 import type { TaskInfo } from "@/types/models";
 import { appState } from "@/utils/app-state";
-import { NButton, NCard, NProgress, NText, useMessage } from "naive-ui";
+import { NButton, NCard, NProgress, NText } from "naive-ui";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -12,7 +12,6 @@ const taskInfo = ref<TaskInfo>({ is_running: false, task_type: "KEY_VALIDATION" 
 const visible = ref(false);
 let pollTimer: number | null = null;
 let isPolling = false; // 添加标志位
-const message = useMessage();
 
 onMounted(() => {
   startPolling();
@@ -71,7 +70,7 @@ async function pollOnce() {
             });
           }
 
-          message.info(msg, {
+          window.$message?.info(msg, {
             closable: true,
             duration: 0,
             onClose: () => {

@@ -3,6 +3,7 @@ import { logApi } from "@/api/logs";
 import type { LogFilter, RequestLog } from "@/types/models";
 import { copy } from "@/utils/clipboard";
 import { maskKey } from "@/utils/display";
+import { calculateTokenCost, formatCost } from "@/utils/token-cost";
 import {
   CheckmarkDoneOutline,
   CloseCircleOutline,
@@ -291,20 +292,49 @@ const allColumnConfigs: ColumnConfig[] = [
   {
     key: "tokens",
     title: t("logs.tokenUsage"),
-    width: 220,
+    width: 280,
     defaultVisible: true,
     render: (row: LogRow) => {
       if (!row.total_tokens) {
         return "-";
       }
 
+      // 计算成本
+      const cost = calculateTokenCost(
+        row.prompt_tokens || 0,
+        row.completion_tokens || 0,
+        row.model || "",
+        row.cached_prompt_tokens,
+        undefined // 暂时没有缓存读取token字段
+      );
+
       const parts: VNodeChild[] = [];
+
+      // Token数量显示
       if (row.total_tokens) {
-        parts.push(h("span", { style: "font-weight: bold; color: var(--primary-color)" }, `${row.total_tokens}`));
+        parts.push(
+          h("div", { style: "display: flex; align-items: center; gap: 6px; margin-bottom: 2px" }, [
+            h(
+              "span",
+              { style: "font-weight: bold; color: var(--primary-color)" },
+              `${row.total_tokens}`
+            ),
+            row.prompt_tokens || row.completion_tokens
+              ? h(
+                "span",
+                { style: "color: var(--text-secondary); font-size: 11px" },
+                `(${row.prompt_tokens || 0}+${row.completion_tokens || 0})`
+              )
+              : null,
+          ])
+        );
       }
-      if (row.prompt_tokens || row.completion_tokens) {
-        parts.push(h("span", { style: "color: var(--text-secondary); font-size: 11px" },
-          ` (${row.prompt_tokens || 0}+${row.completion_tokens || 0})`));
+
+      // 成本显示
+      if (cost > 0) {
+        parts.unshift(
+          h("div", { style: "color: var(--success-color); font-weight: 500" }, formatCost(cost))
+        );
       }
 
       const tooltip: string[] = [];
@@ -320,26 +350,35 @@ const allColumnConfigs: ColumnConfig[] = [
       if (row.image_tokens) {
         tooltip.push(`图像: ${row.image_tokens}`);
       }
+      if (cost > 0) {
+        tooltip.push(`预估成本: ${formatCost(cost)}`);
+      }
 
       if (tooltip.length > 0) {
         return h(
           NTooltip,
           { trigger: "hover" },
           {
-            trigger: () => h("div", { style: "display: flex; align-items: center; gap: 4px" }, [
-              ...parts,
-              h("span", { style: "color: var(--info-color); font-size: 10px" }, " ⓘ")
-            ]),
-            default: () => h("div", {}, [
-              h("div", { style: "font-weight: bold; margin-bottom: 4px" }, "Token 详情:"),
-              ...tooltip.map(tip => h("div", { style: "font-size: 12px" }, tip))
-            ])
+            trigger: () =>
+              h("div", { style: "display: flex; flex-direction: column; gap: 2px" }, [
+                ...parts,
+                h(
+                  "span",
+                  { style: "color: var(--info-color); font-size: 10px; align-self: flex-start" },
+                  "ⓘ 详情"
+                ),
+              ]),
+            default: () =>
+              h("div", {}, [
+                h("div", { style: "font-weight: bold; margin-bottom: 4px" }, "Token 详情:"),
+                ...tooltip.map(tip => h("div", { style: "font-size: 12px" }, tip)),
+              ]),
           }
         );
       }
 
-      return h("div", {}, parts);
-    }
+      return h("div", { style: "display: flex; flex-direction: column; gap: 2px" }, parts);
+    },
   },
   {
     key: "key_value",
@@ -811,11 +850,11 @@ const hasAdvancedTokens = (log: LogRow) => {
               <div class="detail-item-compact" v-if="selectedLog.total_tokens">
                 <span class="detail-label-compact">{{ t("logs.tokenUsage") }}:</span>
                 <div class="token-usage-display">
-                  <n-tag type="primary" size="small">
-                    总计: {{ selectedLog.total_tokens }}
-                  </n-tag>
-                  <span v-if="selectedLog.prompt_tokens || selectedLog.completion_tokens"
-                        class="token-breakdown">
+                  <n-tag type="primary" size="small">总计: {{ selectedLog.total_tokens }}</n-tag>
+                  <span
+                    v-if="selectedLog.prompt_tokens || selectedLog.completion_tokens"
+                    class="token-breakdown"
+                  >
                     ({{ selectedLog.prompt_tokens || 0 }}+{{ selectedLog.completion_tokens || 0 }})
                   </span>
                   <div v-if="hasAdvancedTokens(selectedLog)" class="advanced-tokens">
@@ -953,6 +992,29 @@ const hasAdvancedTokens = (log: LogRow) => {
                 </div>
                 <div class="compact-field-content">
                   {{ formatJsonString(selectedLog.request_body) }}
+                </div>
+              </div>
+
+              <div class="compact-field" v-if="selectedLog.response_body">
+                <div class="compact-field-header">
+                  <span class="compact-field-title">{{ t("logs.responseBody") }}</span>
+                  <n-button
+                    size="tiny"
+                    text
+                    @click="
+                      copyContent(
+                        formatJsonString(selectedLog.response_body),
+                        t('logs.responseBody')
+                      )
+                    "
+                  >
+                    <template #icon>
+                      <n-icon :component="CopyOutline" />
+                    </template>
+                  </n-button>
+                </div>
+                <div class="compact-field-content">
+                  {{ formatJsonString(selectedLog.response_body) }}
                 </div>
               </div>
             </div>

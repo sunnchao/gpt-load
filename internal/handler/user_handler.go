@@ -4,7 +4,7 @@ import (
 	"gpt-load/internal/models"
 	"gpt-load/internal/response"
 	"gpt-load/internal/services"
-	"net/http"
+	app_errors "gpt-load/internal/errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -24,31 +24,31 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 func (h *UserHandler) Register(c *gin.Context) {
 	var req services.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMessage(c, "请求参数无效: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "请求参数无效: "+err.Error()))
 		return
 	}
 
 	// 检查当前用户权限
 	currentUser := h.getCurrentUser(c)
 	if currentUser == nil || currentUser.Role != models.RoleAdmin {
-		response.Error(c, http.StatusForbidden, "权限不足")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "权限不足"))
 		return
 	}
 
 	user, err := h.userService.CreateUser(req)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	response.SuccessWithData(c, user)
+	response.Success(c, user)
 }
 
 // Login 用户登录
 func (h *UserHandler) Login(c *gin.Context) {
 	var req services.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMessage(c, "请求参数无效: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "请求参数无效: "+err.Error()))
 		return
 	}
 
@@ -57,11 +57,11 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	user, token, err := h.userService.Authenticate(req.Username, req.Password, ipAddress, userAgent)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, err.Error()))
 		return
 	}
 
-	response.SuccessWithData(c, gin.H{
+	response.Success(c, gin.H{
 		"user":  user,
 		"token": token,
 	})
@@ -71,24 +71,24 @@ func (h *UserHandler) Login(c *gin.Context) {
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	user := h.getCurrentUser(c)
 	if user == nil {
-		response.Error(c, http.StatusUnauthorized, "未登录")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "未登录"))
 		return
 	}
 
-	response.SuccessWithData(c, user)
+	response.Success(c, user)
 }
 
 // UpdateProfile 更新当前用户信息
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	user := h.getCurrentUser(c)
 	if user == nil {
-		response.Error(c, http.StatusUnauthorized, "未登录")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "未登录"))
 		return
 	}
 
 	var req services.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMessage(c, "请求参数无效: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "请求参数无效: "+err.Error()))
 		return
 	}
 
@@ -100,41 +100,41 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 	err := h.userService.UpdateUser(user.ID, req)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	response.Success(c)
+	response.Success(c, nil)
 }
 
 // ChangePassword 修改密码
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	user := h.getCurrentUser(c)
 	if user == nil {
-		response.Error(c, http.StatusUnauthorized, "未登录")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "未登录"))
 		return
 	}
 
 	var req services.ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMessage(c, "请求参数无效: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "请求参数无效: "+err.Error()))
 		return
 	}
 
 	err := h.userService.ChangePassword(user.ID, req.OldPassword, req.NewPassword)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	response.Success(c)
+	response.Success(c, nil)
 }
 
 // ListUsers 获取用户列表（仅管理员）
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	currentUser := h.getCurrentUser(c)
 	if currentUser == nil || currentUser.Role != models.RoleAdmin {
-		response.Error(c, http.StatusForbidden, "权限不足")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "权限不足"))
 		return
 	}
 
@@ -154,11 +154,11 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 
 	users, total, err := h.userService.ListUsers(page, pageSize, role, status, search)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error()))
 		return
 	}
 
-	response.SuccessWithData(c, gin.H{
+	response.Success(c, gin.H{
 		"list": users,
 		"pagination": gin.H{
 			"page":       page,
@@ -173,19 +173,19 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 func (h *UserHandler) GetUser(c *gin.Context) {
 	currentUser := h.getCurrentUser(c)
 	if currentUser == nil || currentUser.Role != models.RoleAdmin {
-		response.Error(c, http.StatusForbidden, "权限不足")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "权限不足"))
 		return
 	}
 
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.ErrorWithMessage(c, "无效的用户ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "无效的用户ID"))
 		return
 	}
 
 	users, _, err := h.userService.ListUsers(1, 1, "", "", "")
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -199,69 +199,69 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	}
 
 	if targetUser == nil {
-		response.ErrorWithMessage(c, "用户不存在")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "用户不存在"))
 		return
 	}
 
-	response.SuccessWithData(c, targetUser)
+	response.Success(c, targetUser)
 }
 
 // UpdateUser 更新指定用户信息（仅管理员）
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	currentUser := h.getCurrentUser(c)
 	if currentUser == nil || currentUser.Role != models.RoleAdmin {
-		response.Error(c, http.StatusForbidden, "权限不足")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "权限不足"))
 		return
 	}
 
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.ErrorWithMessage(c, "无效的用户ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "无效的用户ID"))
 		return
 	}
 
 	var req services.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMessage(c, "请求参数无效: "+err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "请求参数无效: "+err.Error()))
 		return
 	}
 
 	err = h.userService.UpdateUser(uint(userID), req)
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	response.Success(c)
+	response.Success(c, nil)
 }
 
 // DeleteUser 删除用户（仅管理员）
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	currentUser := h.getCurrentUser(c)
 	if currentUser == nil || currentUser.Role != models.RoleAdmin {
-		response.Error(c, http.StatusForbidden, "权限不足")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrUnauthorized, "权限不足"))
 		return
 	}
 
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.ErrorWithMessage(c, "无效的用户ID")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "无效的用户ID"))
 		return
 	}
 
 	// 不能删除自己
 	if uint(userID) == currentUser.ID {
-		response.ErrorWithMessage(c, "不能删除自己的账户")
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, "不能删除自己的账户"))
 		return
 	}
 
 	err = h.userService.DeleteUser(uint(userID))
 	if err != nil {
-		response.ErrorWithMessage(c, err.Error())
+		response.Error(c, app_errors.NewAPIError(app_errors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	response.Success(c)
+	response.Success(c, nil)
 }
 
 // Logout 用户退出
@@ -275,7 +275,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 		h.userService.Logout(token)
 	}
 
-	response.Success(c)
+	response.Success(c, nil)
 }
 
 // 辅助方法

@@ -1,7 +1,7 @@
+import Layout from "@/components/Layout.vue";
 import { useAuthService } from "@/services/auth";
 import { useUserStore } from "@/stores/user";
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import Layout from "@/components/Layout.vue";
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -27,19 +27,14 @@ const routes: Array<RouteRecordRaw> = [
         path: "settings",
         name: "settings",
         component: () => import("@/views/Settings.vue"),
-        meta: { requiresRole: 'admin' }
-      },
-      {
-        path: "claude-tokens",
-        name: "claude-tokens",
-        component: () => import("@/views/ClaudeTokens.vue"),
+        meta: { requiresRole: "admin" },
       },
       // 用户管理相关路由
       {
         path: "users",
         name: "users",
         component: () => import("@/views/UserManagement.vue"),
-        meta: { requiresRole: 'admin' }
+        meta: { requiresRole: "admin" },
       },
       {
         path: "profile",
@@ -82,15 +77,15 @@ router.beforeEach(async (to, from, next) => {
   const authLoggedIn = checkLogin();
 
   // 公开路由，不需要任何认证
-  const publicRoutes = ['/login', '/user-login'];
+  const publicRoutes = ["/login", "/user-login"];
   if (publicRoutes.includes(to.path)) {
     // 如果已经登录了用户系统，重定向到首页
-    if (userLoggedIn && to.path === '/user-login') {
-      return next({ path: '/' });
+    if (userLoggedIn && to.path === "/user-login") {
+      return next({ path: "/" });
     }
     // 如果已经登录了原有系统，重定向到首页
-    if (authLoggedIn && to.path === '/login') {
-      return next({ path: '/' });
+    if (authLoggedIn && to.path === "/login") {
+      return next({ path: "/" });
     }
     return next();
   }
@@ -101,8 +96,8 @@ router.beforeEach(async (to, from, next) => {
     if (to.meta?.requiresRole) {
       const requiredRole = to.meta.requiresRole as string;
       if (!userStore.hasRole(requiredRole)) {
-        window.$message?.error('权限不足');
-        return next({ name: 'dashboard' });
+        window.$message?.error("权限不足");
+        return next({ name: "dashboard" });
       }
     }
     return next();
@@ -114,8 +109,8 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 两个系统都未登录，重定向到用户登录页（新系统优先）
-  if (to.path !== '/user-login') {
-    return next({ path: '/user-login' });
+  if (to.path !== "/user-login") {
+    return next({ path: "/user-login" });
   }
 
   next();

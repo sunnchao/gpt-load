@@ -6,9 +6,6 @@ import naive from "naive-ui";
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 
-// 导入Claude Token测试功能（开发环境）
-import "@/utils/test-claude-tokens";
-
 const pinia = createPinia();
 
 createApp(App)

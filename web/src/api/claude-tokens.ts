@@ -1,6 +1,6 @@
-import type { ApiResponse } from "@/types/models";
+import type { ApiResponse, LogFilter, LogsResponse, RequestLog } from "@/types/models";
 import http from "@/utils/http";
-import { claudeTokenTracker, type TokenConsumptionRecord } from "@/services/claude-token-tracker";
+import { calculateTokenCost, formatTokenCount as formatTokenCountUtil } from "@/utils/token-cost";
 
 export interface TokenFilter {
   start_time?: string;
@@ -8,6 +8,7 @@ export interface TokenFilter {
   model?: string;
   min_tokens?: number;
   max_tokens?: number;
+  group_name?: string;
 }
 
 export interface TokenStats {
@@ -19,41 +20,137 @@ export interface TokenStats {
   modelBreakdown: Record<string, { count: number; tokens: number }>;
 }
 
+// 将 RequestLog 转换为 Token 记录格式
+export interface TokenConsumptionRecord {
+  timestamp: string;
+  requestId: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+  cachedPromptTokens?: number;
+  reasoningTokens?: number;
+  audioTokens?: number;
+  imageTokens?: number;
+  serviceTier?: string;
+  groupName?: string;
+  keyValue?: string;
+  duration?: number;
+  isSuccess: boolean;
+}
+
 /**
  * Claude Token Usage API
- * 管理Claude API token消费数据的API接口
+ * 基于后端 /logs 接口获取token消费数据
  */
 export const claudeTokenApi = {
   /**
-   * 处理Claude API流式响应并记录token使用量
+   * 将 RequestLog 转换为 TokenConsumptionRecord
    */
-  processClaudeResponse: async (responseText: string): Promise<TokenConsumptionRecord | null> => {
-    try {
-      const record = claudeTokenTracker.processAndStore(responseText);
-      if (record) {
-        // 可选：发送到后端服务器持久化存储
-        // await http.post("/tokens/claude", record);
-      }
-      return record;
-    } catch (error) {
-      console.error("Failed to process Claude response:", error);
-      return null;
-    }
+  convertLogToTokenRecord: (log: any): TokenConsumptionRecord => {
+    return {
+      timestamp: log.timestamp,
+      requestId: log.id,
+      model: log.model,
+      inputTokens: log.prompt_tokens || 0,
+      outputTokens: log.completion_tokens || 0,
+      totalTokens: log.total_tokens || 0,
+      cacheCreationTokens: log.cached_prompt_tokens,
+      cacheReadTokens: log.cached_completion_tokens,
+      cachedPromptTokens: (log.cached_prompt_tokens || 0) + (log.cached_completion_tokens || 0),
+      reasoningTokens: log.reasoning_tokens,
+      audioTokens: log.audio_tokens,
+      imageTokens: log.image_tokens,
+      serviceTier: undefined, // 后端暂无此字段
+      groupName: log.group_name,
+      keyValue: log.key_value,
+      duration: log.duration_ms,
+      isSuccess: log.is_success,
+    };
   },
 
   /**
    * 获取token消费统计
    */
-  getTokenStats: (): Promise<ApiResponse<TokenStats>> => {
+  getTokenStats: async (filter?: TokenFilter): Promise<ApiResponse<TokenStats>> => {
     try {
-      const stats = claudeTokenTracker.getUsageStats();
-      return Promise.resolve({
+      // 构建查询参数，获取所有符合条件的记录用于统计
+      const logFilter: LogFilter = {
+        page: 1,
+        page_size: 10000, // 获取大量数据用于统计
+        start_time: filter?.start_time,
+        end_time: filter?.end_time,
+        model: filter?.model,
+        group_name: filter?.group_name,
+        is_success: true, // 只统计成功的请求
+      };
+
+      const response = await http.get<ApiResponse<LogsResponse>>("/logs", { params: logFilter });
+
+      if (response.data.code !== 0) {
+        throw new Error(response.data.message);
+      }
+
+      const logs = response.data.data?.items || [];
+
+      // 过滤有token数据的记录
+      const tokenLogs = logs.filter(
+        (log: any) =>
+          (log.total_tokens && log.total_tokens > 0) ||
+          (log.prompt_tokens && log.prompt_tokens > 0) ||
+          (log.completion_tokens && log.completion_tokens > 0)
+      );
+
+      // 应用token数量过滤
+      const filteredLogs = tokenLogs.filter((log: any) => {
+        if (filter?.min_tokens && (log.total_tokens || 0) < filter.min_tokens) {
+          return false;
+        }
+        if (filter?.max_tokens && (log.total_tokens || 0) > filter.max_tokens) {
+          return false;
+        }
+        return true;
+      });
+
+      // 计算统计信息
+      const stats: TokenStats = {
+        totalTokens: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCachedTokens: 0,
+        recordCount: filteredLogs.length,
+        modelBreakdown: {},
+      };
+
+      filteredLogs.forEach(log => {
+        const totalTokens = log.total_tokens || 0;
+        const inputTokens = log.prompt_tokens || 0;
+        const outputTokens = log.completion_tokens || 0;
+        const cachedTokens = (log.cached_prompt_tokens || 0) + (log.cached_completion_tokens || 0);
+
+        stats.totalTokens += totalTokens;
+        stats.totalInputTokens += inputTokens;
+        stats.totalOutputTokens += outputTokens;
+        stats.totalCachedTokens += cachedTokens;
+
+        // 模型统计
+        if (!stats.modelBreakdown[log.model]) {
+          stats.modelBreakdown[log.model] = { count: 0, tokens: 0 };
+        }
+        stats.modelBreakdown[log.model].count++;
+        stats.modelBreakdown[log.model].tokens += totalTokens;
+      });
+
+      return {
         code: 0,
         message: "Success",
-        data: stats
-      });
+        data: stats,
+      };
     } catch (error) {
-      return Promise.resolve({
+      console.error("Failed to get token stats:", error);
+      return {
         code: -1,
         message: `Failed to get token stats: ${error}`,
         data: {
@@ -62,51 +159,80 @@ export const claudeTokenApi = {
           totalOutputTokens: 0,
           totalCachedTokens: 0,
           recordCount: 0,
-          modelBreakdown: {}
-        }
-      });
+          modelBreakdown: {},
+        },
+      };
     }
   },
 
   /**
    * 获取token消费记录列表
    */
-  getTokenRecords: (filter?: TokenFilter): Promise<ApiResponse<TokenConsumptionRecord[]>> => {
+  getTokenRecords: async (
+    filter?: TokenFilter,
+    page: number = 1,
+    pageSize: number = 15
+  ): Promise<ApiResponse<{ records: TokenConsumptionRecord[]; pagination: any }>> => {
     try {
-      let records = claudeTokenTracker.getTokenRecords();
+      const logFilter: LogFilter = {
+        page,
+        page_size: pageSize,
+        start_time: filter?.start_time,
+        end_time: filter?.end_time,
+        model: filter?.model,
+        group_name: filter?.group_name,
+        is_success: true, // 只获取成功的请求
+      };
 
-      // 应用过滤器
-      if (filter) {
-        records = records.filter(record => {
-          // 时间范围过滤
-          if (filter.start_time && record.timestamp < filter.start_time) return false;
-          if (filter.end_time && record.timestamp > filter.end_time) return false;
+      const response = await http.get<ApiResponse<LogsResponse>>("/logs", { params: logFilter });
 
-          // 模型过滤
-          if (filter.model && !record.model.includes(filter.model)) return false;
+      if (response.data.code !== 0) {
+        throw new Error(response.data.message);
+      }
 
-          // token数量范围过滤
-          if (filter.min_tokens && record.totalTokens < filter.min_tokens) return false;
-          if (filter.max_tokens && record.totalTokens > filter.max_tokens) return false;
+      const logs = response.data.data?.items || [];
 
+      // 过滤有token数据的记录并转换格式
+      let tokenRecords = logs
+        .filter(
+          (log: RequestLog) =>
+            (log.total_tokens && log.total_tokens > 0) ||
+            (log.prompt_tokens && log.prompt_tokens > 0) ||
+            (log.completion_tokens && log.completion_tokens > 0)
+        )
+        .map((log: RequestLog) => claudeTokenApi.convertLogToTokenRecord(log));
+
+      // 应用token数量过滤
+      if (filter?.min_tokens || filter?.max_tokens) {
+        tokenRecords = tokenRecords.filter((record: TokenConsumptionRecord) => {
+          if (filter.min_tokens && record.totalTokens < filter.min_tokens) {
+            return false;
+          }
+          if (filter.max_tokens && record.totalTokens > filter.max_tokens) {
+            return false;
+          }
           return true;
         });
       }
 
-      // 按时间倒序排列
-      records.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      return Promise.resolve({
+      return {
         code: 0,
         message: "Success",
-        data: records
-      });
+        data: {
+          records: tokenRecords,
+          pagination: response.data.data?.pagination,
+        },
+      };
     } catch (error) {
-      return Promise.resolve({
+      console.error("Failed to get token records:", error);
+      return {
         code: -1,
         message: `Failed to get token records: ${error}`,
-        data: []
-      });
+        data: {
+          records: [],
+          pagination: { page: 1, page_size: pageSize, total_items: 0, total_pages: 0 },
+        },
+      };
     }
   },
 
@@ -115,23 +241,45 @@ export const claudeTokenApi = {
    */
   exportTokenRecords: (filter?: TokenFilter): void => {
     try {
-      // TODO: 将来可以基于filter参数过滤导出的记录
-      console.log("Export filter:", filter);
+      // 使用现有的日志导出功能
+      const logFilter: Omit<LogFilter, "page" | "page_size"> = {
+        start_time: filter?.start_time,
+        end_time: filter?.end_time,
+        model: filter?.model,
+        group_name: filter?.group_name,
+        is_success: true,
+      };
 
-      const csvContent = claudeTokenTracker.exportToCsv();
+      // 导出日志（包含token信息）
+      const authKey = localStorage.getItem("authKey");
+      if (!authKey) {
+        window.$message?.error("未找到认证密钥");
+        return;
+      }
 
-      // 创建下载链接
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const queryParams = new URLSearchParams(
+        Object.entries(logFilter).reduce(
+          (acc, [key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+              acc[key] = String(value);
+            }
+            return acc;
+          },
+          {} as Record<string, string>
+        )
+      );
+      queryParams.append("key", authKey);
+
+      const url = `${http.defaults.baseURL}/logs/export?${queryParams.toString()}`;
+
       const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-
-      link.setAttribute("href", url);
+      link.href = url;
       link.setAttribute("download", `claude-token-usage-${Date.now()}.csv`);
-      link.style.visibility = 'hidden';
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      window.$message?.success("token使用记录导出成功");
     } catch (error) {
       console.error("Failed to export token records:", error);
       window.$message?.error("导出失败");
@@ -139,102 +287,19 @@ export const claudeTokenApi = {
   },
 
   /**
-   * 清除所有token记录
+   * 清除所有token记录（实际上无法清除后端日志，此功能保留以兼容现有接口）
    */
   clearTokenRecords: (): Promise<ApiResponse<boolean>> => {
-    try {
-      claudeTokenTracker.clearRecords();
-      return Promise.resolve({
-        code: 0,
-        message: "Records cleared successfully",
-        data: true
-      });
-    } catch (error) {
-      return Promise.resolve({
-        code: -1,
-        message: `Failed to clear records: ${error}`,
-        data: false
-      });
-    }
+    // 由于使用后端数据，无法直接清除记录
+    window.$message?.warning("无法清除后端日志记录，请联系管理员");
+    return Promise.resolve({
+      code: -1,
+      message: "Cannot clear backend logs",
+      data: false,
+    });
   },
-
-  /**
-   * 手动解析Claude响应示例（用于测试）
-   */
-  parseResponseExample: (responseText: string): Promise<ApiResponse<TokenConsumptionRecord | null>> => {
-    try {
-      const record = claudeTokenTracker.parseStreamingResponse(responseText);
-      return Promise.resolve({
-        code: 0,
-        message: "Parsing successful",
-        data: record
-      });
-    } catch (error) {
-      return Promise.resolve({
-        code: -1,
-        message: `Parsing failed: ${error}`,
-        data: null
-      });
-    }
-  }
 };
 
-/**
- * HTTP拦截器：自动检测和处理Claude API响应
- */
-export const setupClaudeTokenInterceptor = () => {
-  // 响应拦截器
-  http.interceptors.response.use(
-    (response) => {
-      // 检查是否为Claude API响应（基于URL或响应头）
-      const url = response.config.url || "";
-      const isClaudeApi = url.includes("claude") || url.includes("anthropic");
-
-      if (isClaudeApi && response.data) {
-        try {
-          // 尝试解析并存储token使用量
-          const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-          claudeTokenApi.processClaudeResponse(responseText);
-        } catch (error) {
-          console.warn("Failed to process Claude response for token tracking:", error);
-        }
-      }
-
-      return response;
-    },
-    (error) => {
-      return Promise.reject(error);
-    }
-  );
-};
-
-// 工具函数：格式化token数量显示
-export const formatTokenCount = (count: number): string => {
-  if (count < 1000) return count.toString();
-  if (count < 1000000) return (count / 1000).toFixed(1) + 'K';
-  return (count / 1000000).toFixed(1) + 'M';
-};
-
-// 工具函数：计算成本估算（基于Claude定价）
-export const estimateCost = (inputTokens: number, outputTokens: number, model: string): number => {
-  // Claude定价（示例，实际价格请参考官方文档）
-  const pricing: Record<string, { input: number; output: number }> = {
-    "claude-sonnet-4": { input: 0.003, output: 0.015 }, // per 1K tokens
-    "claude-haiku-3": { input: 0.00025, output: 0.00125 },
-    "claude-opus-3": { input: 0.015, output: 0.075 }
-  };
-
-  // 查找匹配的模型价格
-  let modelPricing = pricing["claude-sonnet-4"]; // 默认价格
-  for (const [modelName, price] of Object.entries(pricing)) {
-    if (model.includes(modelName)) {
-      modelPricing = price;
-      break;
-    }
-  }
-
-  const inputCost = (inputTokens / 1000) * modelPricing.input;
-  const outputCost = (outputTokens / 1000) * modelPricing.output;
-
-  return inputCost + outputCost;
-};
+// 重新导出工具函数以保持向后兼容
+export const formatTokenCount = formatTokenCountUtil;
+export const estimateCost = calculateTokenCost;

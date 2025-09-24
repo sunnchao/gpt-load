@@ -1,25 +1,25 @@
 <script setup lang="ts">
+import { getLocale } from "@/locales";
 import { appState } from "@/utils/app-state";
 import { actualTheme } from "@/utils/theme";
-import { getLocale } from "@/locales";
 import {
   darkTheme,
+  dateEnUS,
+  dateJaJP,
+  dateZhCN,
+  enUS,
+  jaJP,
   NConfigProvider,
   NDialogProvider,
   NLoadingBarProvider,
   NMessageProvider,
   useLoadingBar,
   useMessage,
+  zhCN,
   type GlobalTheme,
   type GlobalThemeOverrides,
-  zhCN,
-  enUS,
-  jaJP,
-  dateZhCN,
-  dateEnUS,
-  dateJaJP,
 } from "naive-ui";
-import { computed, defineComponent, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 // 自定义主题配置 - 根据主题动态调整
 const themeOverrides = computed<GlobalThemeOverrides>(() => {
@@ -183,33 +183,28 @@ const dateLocale = computed(() => {
   }
 });
 
-function useGlobalMessage() {
-  window.$message = useMessage();
+// Setup loading bar
+const loadingBarApi = ref<ReturnType<typeof useLoadingBar> | null>(null);
+const messageApi = ref<ReturnType<typeof useMessage> | null>(null);
+
+function setupLoadingBar() {
+  loadingBarApi.value = useLoadingBar();
+  watch(
+    () => appState.loading,
+    loading => {
+      if (loading) {
+        loadingBarApi.value?.start();
+      } else {
+        loadingBarApi.value?.finish();
+      }
+    }
+  );
 }
 
-const LoadingBar = defineComponent({
-  setup() {
-    const loadingBar = useLoadingBar();
-    watch(
-      () => appState.loading,
-      loading => {
-        if (loading) {
-          loadingBar.start();
-        } else {
-          loadingBar.finish();
-        }
-      }
-    );
-    return () => null;
-  },
-});
-
-const Message = defineComponent({
-  setup() {
-    useGlobalMessage();
-    return () => null;
-  },
-});
+function setupMessage() {
+  messageApi.value = useMessage();
+  window.$message = messageApi.value;
+}
 </script>
 
 <template>
@@ -223,8 +218,8 @@ const Message = defineComponent({
       <n-message-provider placement="top-right">
         <n-dialog-provider>
           <slot />
-          <loading-bar />
-          <message />
+          <!-- Setup hooks component -->
+          <component :is="() => { setupLoadingBar(); setupMessage(); return null; }" />
         </n-dialog-provider>
       </n-message-provider>
     </n-loading-bar-provider>

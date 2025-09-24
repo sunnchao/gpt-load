@@ -1,4 +1,4 @@
-package migrations
+package db
 
 import (
 	"gpt-load/internal/models"
