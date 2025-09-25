@@ -25,7 +25,7 @@
   "homepage": "https://github.com/tbphp/gpt-load#readme",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
