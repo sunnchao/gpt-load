@@ -54,4 +54,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=$(cat VERSION)
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
