@@ -39,6 +39,10 @@ jobs:
             type=raw,value=beta,enable=${{ endsWith(github.ref, '-beta') }}
             type=raw,value=latest,enable=${{ !contains(github.ref, '-') }}
 
+      - name: Get commit SHA
+        id: commit
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -49,4 +53,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.sha }}
+            VERSION=${{ steps.commit.outputs.sha }}
