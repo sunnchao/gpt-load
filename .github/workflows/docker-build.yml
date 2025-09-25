@@ -32,8 +32,6 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-          flavor: |
-            latest=false
           tags: |
             type=ref,event=tag
             type=raw,value=beta,enable=${{ endsWith(github.ref, '-beta') }}
