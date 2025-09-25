@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "*"
+  workflow_dispatch:
 jobs:
   build_docker_image:
     name: Build Docker Image
@@ -48,4 +49,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.tags }}
+            VERSION=${{ github.sha }}
