@@ -1,5 +1,6 @@
 FROM node:20-alpine AS builder
 
+COPY ./VERSION .
 ARG VERSION=1.0.0
 WORKDIR /build
 COPY ./web .
