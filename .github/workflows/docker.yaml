@@ -5,6 +5,12 @@ on:
     tags:
       - "*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the Docker image'
+        required: false
+        default: ''
+        type: string
 jobs:
   build_docker_image:
     name: Build Docker Image
@@ -49,12 +55,15 @@ jobs:
             type=raw,value=beta,enable=${{ endsWith(github.ref, '-beta') }}
             type=raw,value=latest,enable=${{ endsWith(github.ref, '-beta') }}
 
-      - name: Generate timestamp tag
-        id: timestamp
+      - name: Generate version tag
+        id: version
         run: |
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
-          echo "docker_tag_timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(date +%Y%m%d_%H%M%S)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Save version info
         run: |
@@ -69,15 +78,15 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.timestamp.outputs.timestamp }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
           labels: |
             org.opencontainers.image.title=gpt-load
             org.opencontainers.image.description=GPT Load Balancer
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.timestamp.outputs.timestamp }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
-            VERSION=${{ steps.timestamp.outputs.timestamp }}
+            VERSION=${{ steps.version.outputs.version }}
