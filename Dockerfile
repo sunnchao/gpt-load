@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 
 ARG VERSION=1.0.0
 WORKDIR /build
@@ -7,12 +7,15 @@ RUN npm install
 RUN VITE_VERSION=${VERSION} npm run build
 
 
-FROM golang:alpine AS builder2
+FROM --platform=$BUILDPLATFORM golang:alpine AS builder2
 
 ARG VERSION=1.0.0
+ARG TARGETOS
+ARG TARGETARCH
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
-    GOOS=linux
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH}
 
 WORKDIR /build
 
