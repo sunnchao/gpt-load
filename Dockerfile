@@ -27,8 +27,7 @@ RUN go build -ldflags "-s -w -X gpt-load/internal/version.Version=${VERSION}" -o
 FROM alpine
 
 WORKDIR /app
-RUN apk upgrade --no-cache \
-    && apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata \
     && update-ca-certificates
 
 COPY --from=builder2 /build/gpt-load .
