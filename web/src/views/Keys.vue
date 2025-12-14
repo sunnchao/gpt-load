@@ -25,6 +25,12 @@ async function loadGroups() {
   try {
     loading.value = true;
     groups.value = await keysApi.getGroups();
+
+    groups.value?.forEach(group => {
+      if (group.endpoint) {
+        group.endpoint = `${window.location.origin}/${group.name}`;
+      }
+    });
     // 选择默认分组
     if (groups.value.length > 0 && !selectedGroup.value) {
       const groupId = route.query.groupId;
