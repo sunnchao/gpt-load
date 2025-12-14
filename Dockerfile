@@ -24,7 +24,7 @@ COPY --from=builder /build/dist ./web/dist
 RUN go build -ldflags "-s -w -X gpt-load/internal/version.Version=${VERSION}" -o gpt-load
 
 
-FROM alpine
+FROM alpine:3.18
 
 WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata \
