@@ -4,7 +4,7 @@ ARG VERSION=1.0.0
 WORKDIR /build
 COPY ./web .
 RUN npm install
-RUN VITE_VERSION=${VERSION} npm run build
+RUN VITE_VERSION=${VERSION} npx vite build
 
 
 FROM --platform=$BUILDPLATFORM golang:alpine AS builder2

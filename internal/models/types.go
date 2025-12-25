@@ -79,34 +79,34 @@ type ParentAggregateGroupInfo struct {
 
 // Group 对应 groups 表
 type Group struct {
-	ID                   uint                 `gorm:"primaryKey;autoIncrement" json:"id"`
-	EffectiveConfig      types.SystemSettings `gorm:"-" json:"effective_config,omitempty"`
-	Name                 string               `gorm:"type:varchar(255);not null;unique" json:"name"`
-	Endpoint             string               `gorm:"-" json:"endpoint"`
-	DisplayName          string               `gorm:"type:varchar(255)" json:"display_name"`
-	ProxyKeys            string               `gorm:"type:text" json:"proxy_keys"`
-	Description          string               `gorm:"type:varchar(512)" json:"description"`
-	GroupType            string               `gorm:"type:varchar(50);default:'standard'" json:"group_type"` // 'standard' or 'aggregate'
-	Upstreams            datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
-	ValidationEndpoint   string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
-	ChannelType          string               `gorm:"type:varchar(50);not null" json:"channel_type"`
-	Sort                 int                  `gorm:"default:0" json:"sort"`
-	TestModel            string               `gorm:"type:varchar(255);not null" json:"test_model"`
-	ParamOverrides       datatypes.JSONMap    `gorm:"type:json" json:"param_overrides"`
-	Config               datatypes.JSONMap    `gorm:"type:json" json:"config"`
-	HeaderRules          datatypes.JSON       `gorm:"type:json" json:"header_rules"`
-	ModelRedirectRules   datatypes.JSONMap    `gorm:"type:json" json:"model_redirect_rules"`
-	ModelRedirectStrict  bool                 `gorm:"default:false" json:"model_redirect_strict"`
-	APIKeys              []APIKey             `gorm:"foreignKey:GroupID" json:"api_keys"`
-	SubGroups            []GroupSubGroup      `gorm:"-" json:"sub_groups,omitempty"`
-	LastValidatedAt      *time.Time           `json:"last_validated_at"`
-	CreatedAt            time.Time            `json:"created_at"`
-	UpdatedAt            time.Time            `json:"updated_at"`
+	ID                  uint                 `gorm:"primaryKey;autoIncrement" json:"id"`
+	EffectiveConfig     types.SystemSettings `gorm:"-" json:"effective_config,omitempty"`
+	Name                string               `gorm:"type:varchar(255);not null;unique" json:"name"`
+	Endpoint            string               `gorm:"-" json:"endpoint"`
+	DisplayName         string               `gorm:"type:varchar(255)" json:"display_name"`
+	ProxyKeys           string               `gorm:"type:text" json:"proxy_keys"`
+	Description         string               `gorm:"type:varchar(512)" json:"description"`
+	GroupType           string               `gorm:"type:varchar(50);default:'standard'" json:"group_type"` // 'standard' or 'aggregate'
+	Upstreams           datatypes.JSON       `gorm:"type:json;not null" json:"upstreams"`
+	ValidationEndpoint  string               `gorm:"type:varchar(255)" json:"validation_endpoint"`
+	ChannelType         string               `gorm:"type:varchar(50);not null" json:"channel_type"`
+	Sort                int                  `gorm:"default:0" json:"sort"`
+	TestModel           string               `gorm:"type:varchar(255);not null" json:"test_model"`
+	ParamOverrides      datatypes.JSONMap    `gorm:"type:json" json:"param_overrides"`
+	Config              datatypes.JSONMap    `gorm:"type:json" json:"config"`
+	HeaderRules         datatypes.JSON       `gorm:"type:json" json:"header_rules"`
+	ModelRedirectRules  datatypes.JSONMap    `gorm:"type:json" json:"model_redirect_rules"`
+	ModelRedirectStrict bool                 `gorm:"default:false" json:"model_redirect_strict"`
+	APIKeys             []APIKey             `gorm:"foreignKey:GroupID" json:"api_keys"`
+	SubGroups           []GroupSubGroup      `gorm:"-" json:"sub_groups,omitempty"`
+	LastValidatedAt     *time.Time           `json:"last_validated_at"`
+	CreatedAt           time.Time            `json:"created_at"`
+	UpdatedAt           time.Time            `json:"updated_at"`
 
 	// For cache
-	ProxyKeysMap      map[string]struct{} `gorm:"-" json:"-"`
-	HeaderRuleList    []HeaderRule        `gorm:"-" json:"-"`
-	ModelRedirectMap  map[string]string   `gorm:"-" json:"-"`
+	ProxyKeysMap     map[string]struct{} `gorm:"-" json:"-"`
+	HeaderRuleList   []HeaderRule        `gorm:"-" json:"-"`
+	ModelRedirectMap map[string]string   `gorm:"-" json:"-"`
 }
 
 // APIKey 对应 api_keys 表
@@ -132,26 +132,29 @@ const (
 
 // RequestLog 对应 request_logs 表
 type RequestLog struct {
-	ID              string    `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Timestamp       time.Time `gorm:"not null;index" json:"timestamp"`
-	GroupID         uint      `gorm:"not null;index" json:"group_id"`
-	GroupName       string    `gorm:"type:varchar(255);index" json:"group_name"`
-	ParentGroupID   uint      `gorm:"index" json:"parent_group_id"`
-	ParentGroupName string    `gorm:"type:varchar(255);index" json:"parent_group_name"`
-	KeyValue        string    `gorm:"type:text" json:"key_value"`
-	KeyHash         string    `gorm:"type:varchar(128);index" json:"key_hash"`
-	Model           string    `gorm:"type:varchar(255);index" json:"model"`
-	IsSuccess       bool      `gorm:"not null" json:"is_success"`
-	SourceIP        string    `gorm:"type:varchar(64)" json:"source_ip"`
-	StatusCode      int       `gorm:"not null" json:"status_code"`
-	RequestPath     string    `gorm:"type:varchar(500)" json:"request_path"`
-	Duration        int64     `gorm:"not null" json:"duration_ms"`
-	ErrorMessage    string    `gorm:"type:text" json:"error_message"`
-	UserAgent       string    `gorm:"type:varchar(512)" json:"user_agent"`
-	RequestType     string    `gorm:"type:varchar(20);not null;default:'final';index" json:"request_type"`
-	UpstreamAddr    string    `gorm:"type:varchar(500)" json:"upstream_addr"`
-	IsStream        bool      `gorm:"not null" json:"is_stream"`
-	RequestBody     string    `gorm:"type:text" json:"request_body"`
+	ID               string    `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Timestamp        time.Time `gorm:"not null;index" json:"timestamp"`
+	GroupID          uint      `gorm:"not null;index" json:"group_id"`
+	GroupName        string    `gorm:"type:varchar(255);index" json:"group_name"`
+	ParentGroupID    uint      `gorm:"index" json:"parent_group_id"`
+	ParentGroupName  string    `gorm:"type:varchar(255);index" json:"parent_group_name"`
+	KeyValue         string    `gorm:"type:text" json:"key_value"`
+	KeyHash          string    `gorm:"type:varchar(128);index" json:"key_hash"`
+	Model            string    `gorm:"type:varchar(255);index" json:"model"`
+	IsSuccess        bool      `gorm:"not null" json:"is_success"`
+	SourceIP         string    `gorm:"type:varchar(64)" json:"source_ip"`
+	StatusCode       int       `gorm:"not null" json:"status_code"`
+	RequestPath      string    `gorm:"type:varchar(500)" json:"request_path"`
+	Duration         int64     `gorm:"not null" json:"duration_ms"`
+	ErrorMessage     string    `gorm:"type:text" json:"error_message"`
+	UserAgent        string    `gorm:"type:varchar(512)" json:"user_agent"`
+	RequestType      string    `gorm:"type:varchar(20);not null;default:'final';index" json:"request_type"`
+	UpstreamAddr     string    `gorm:"type:varchar(500)" json:"upstream_addr"`
+	IsStream         bool      `gorm:"not null" json:"is_stream"`
+	RequestBody      string    `gorm:"type:text" json:"request_body"`
+	PromptTokens     int       `gorm:"default:0" json:"prompt_tokens"`
+	CompletionTokens int       `gorm:"default:0" json:"completion_tokens"`
+	TotalTokens      int       `gorm:"default:0" json:"total_tokens"`
 }
 
 // StatCard 用于仪表盘的单个统计卡片数据
